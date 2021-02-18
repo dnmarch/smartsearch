@@ -1,25 +1,45 @@
-import logo from './logo.svg';
+/*global chrome*/
+import React, { Component } from 'react';
 import './App.css';
+import QRCode from 'qrcode.react'
+import TodoList from "./ToDoList";
 
-function App() {
-  return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
-  );
+class App extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { url: '' }
+  }
+
+  renderStatus(url) {
+    this.setState({ url })
+  }
+
+  render() {
+    const { url } = this.state
+    return (
+      <div>
+        <div>QRCode</div>
+        <div className="url">
+          {url}
+        </div>
+        <QRCode value={url} size={270} />
+        <TodoList/>
+      </div>
+    );
+  }
+
+  componentDidMount() {
+    var queryInfo = {
+      active: true,
+      currentWindow: true
+    }
+    
+    chrome.tabs.query(queryInfo, (tabs) => {
+      const tab = tabs[0]
+      const url = tab.url
+      this.setState({ url })
+    })
+  }
 }
 
 export default App;
