@@ -1,6 +1,6 @@
 /*global chrome*/
 import React, {Component} from 'react'
-
+import axios from 'axios';
 
 class TodoList extends Component {
 
@@ -8,10 +8,13 @@ class TodoList extends Component {
         super(props);
         this.state = {
             inputValue: '',
-            list: ['abc', 'def']
+            contents: ['abc', 'def'],
+            sep: '%$',
+            host: 'http://caa6a6a9292c.ngrok.io',
         }
         this.displayContent = this.displayContent.bind(this)
-
+        this.handlePostQuery = this.handlePostQuery.bind(this)
+        //this.queryAnswer = this.queryAnswer.bind(this)
     }
 
 
@@ -29,7 +32,7 @@ class TodoList extends Component {
                 <div>
                     <ul>
                         {
-                            this.state.list.map((item, index) => {
+                            this.state.contents.map((item, index) => {
                                 return <li> {item}</li>
                             })
                         }
@@ -52,20 +55,32 @@ class TodoList extends Component {
 
     handleButtonClick() {
         this.setState({
-            list: [...this.state.list, this.state.inputValue],
+            contents: [...this.state.contents, this.state.inputValue],
         })
     }
 
     handleEnterKey(e) {
         if (e.key === 'Enter') {
             this.setState({
-                list: [...this.state.list, this.state.inputValue],
+                contents: [...this.state.contents, this.state.inputValue],
             })
 
+            const question = this.state.inputValue
+            this.setState({
+                contents: [this.state.inputValue],
+            })
             chrome.tabs.executeScript( null, {code:'document.body.innerText.split("\\n");'},
                 this.displayContent);
 
-            const question = this.state.inputValue
+
+            const content = this.state.contents.join(this.state.sep)
+            //const query = question + this.state.sep + content
+            //console.log("current state")
+            //console.log(content)
+            //const answer = this.queryAnswer(question)
+            //console.log("the answer is")
+            //console.log(answer)
+            //this.handlePostQuery(query)
 
             chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
                 chrome.tabs.sendMessage(tabs[0].id, {greeting: question}, function(response) {
@@ -80,8 +95,8 @@ class TodoList extends Component {
     }
 
     displayContent(resultArray) {
-
-        var content = []
+        const question = this.state.contents[0]
+        let content = [question]
 
         for (let i = 0; i < resultArray[0].length; i++) {
             const line = resultArray[0][i];
@@ -90,9 +105,72 @@ class TodoList extends Component {
             }
             content.push(line)
         }
+
+
+        const text = content.join(this.state.sep)
+        this.handlePostQuery(text)
+        /*
         this.setState({
-            list: content
+            contents: question + "set done"
+        })*/
+
+    }
+
+    queryAnswer(question) {
+        const url = this.state.host + "/api/query"
+        const content = document.body.innerText
+        const data = question+"\n"+content
+        fetch(url, {
+                method:"POST",
+                mode: 'cors',
+                credentials: 'include',
+                headers:{
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body:JSON.stringify(data)
+            }
+        ).then(response => {
+            return response.json()
+        }).then(json => {
+            console.log(json)
+            //this.setState({playerName: json[0]})
         })
+    }
+
+    handlePostQuery(query){
+        const url = this.state.host + '/api/query'
+        var myParams = {
+            data: query
+        }
+        let answer = "fail"
+        if (query !=="") {
+            axios.post(url, myParams)
+                .then(function(response){
+
+                    answer = response.data.toString()
+                    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+                        chrome.tabs.sendMessage(tabs[0].id, {greeting: answer}, function(response) {
+                            //console.log(response.farewell);
+                        });
+                    });
+                    //Perform action based on response
+                })
+                .catch(function(error){
+                    console.log(error);
+                    answer = "error happen in response"
+                    //Perform action based on error
+                });
+            /*
+            this.setState({
+                contents: myParams.data,
+            })*/
+        } else {
+            alert("The search query cannot be empty")
+        }
+        /*
+        this.setState({
+            contents: [answer],
+        }) */
     }
 
 

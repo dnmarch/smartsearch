@@ -18,7 +18,7 @@ class App extends Component {
     const { url } = this.state
     return (
       <div>
-        <div>QRCode</div>
+        <div>SmartSearch</div>
         <div className="url">
           {url}
         </div>

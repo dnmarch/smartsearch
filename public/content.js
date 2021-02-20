@@ -1,4 +1,6 @@
 /*global chrome*/
+const host = "http://272678b23a91.ngrok.io"
+
 function doSearch(text, backgroundColor) {
 
     console.log("doing search")
@@ -32,15 +34,56 @@ chrome.runtime.onMessage.addListener(
         console.log(sender.tab ?
             "from a content script:" + sender.tab.url :
             "from the extension");
-
         // Suppose to get the highlight text from back-end
         // Now just highlight the question(user input text)
-        const question = request.greeting
+        const answers = request.greeting
+        //const answer = queryAnswer(question)
+        //console.log("the answer return is")
+        //console.log(answer)
+
         unhighlight(document.body)
-        doSearch(question, 'yellow')
+
+        console.log("receive answer")
+        console.log(answers)
+        console.log(answers.length)
+        let answer_list = answers.split("%$")
+        console.log(answer_list)
+        for (var i = 0; i < answer_list.length; i++) {
+            const answer = answer_list[i]
+            console.log("inside for loop")
+            console.log(answer)
+
+            if (answer.length < 2) continue
+
+            console.log("searching answer")
+            console.log(answer)
+            doSearch(answer, 'yellow')
+            console.log("searching answer end")
+        }
+
 
     }
 );
+function queryAnswer(question) {
+    const url = host + "/api/query"
+    const content = document.body.innerText
+    const data = question+"\n"+content
+    fetch(url, {
+            method:"POST",
+            mode: 'cors',
+            credentials: 'include',
+            headers:{
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body:JSON.stringify(data)
+        }
+    ).then(response => {
+        return response.json()
+    }).then(json => {
+            console.log(json)
+            //this.setState({playerName: json[0]})
+        })
+}
 
 
 /*
@@ -81,4 +124,4 @@ for ( var i = 0; i < numLinks; i++ ) {
 
 
 
-for (let item of urls) console.log(item)
+//for (let item of urls) console.log(item)
