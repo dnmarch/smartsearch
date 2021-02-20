@@ -1,7 +1,6 @@
 /*global chrome*/
 import React, { Component } from 'react';
 import './App.css';
-import QRCode from 'qrcode.react'
 import TodoList from "./ToDoList";
 
 class App extends Component {
@@ -22,7 +21,6 @@ class App extends Component {
         <div className="url">
           {url}
         </div>
-        <QRCode value={url} size={270} />
         <TodoList/>
       </div>
     );

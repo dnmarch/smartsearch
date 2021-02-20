@@ -1,22 +1,31 @@
 /*global chrome*/
 import React, {Component} from 'react'
 import axios from 'axios';
+const qna = require('@tensorflow-models/qna');
 
 class TodoList extends Component {
 
+    async load_model() {
+    	this.model = await qna.load();
+    }
+    
     constructor(props) {
         super(props);
         this.state = {
             inputValue: '',
-            contents: ['abc', 'def'],
+            contents: ['Ask as many questions as you want!'],
             sep: '%$',
             host: 'http://caa6a6a9292c.ngrok.io',
         }
+        //this.queryAnswer = this.queryAnswer.bind(this)
+        this.load_model = this.load_model.bind(this)	
+	this.run_model = this.run_model.bind(this)
+	this.load_model().finally(() => {
         this.displayContent = this.displayContent.bind(this)
         this.handlePostQuery = this.handlePostQuery.bind(this)
-        //this.queryAnswer = this.queryAnswer.bind(this)
+	})
     }
-
+	
 
     render() {
         return (
@@ -95,7 +104,8 @@ class TodoList extends Component {
     }
 
     displayContent(resultArray) {
-        const question = this.state.contents[0]
+        /* 
+	const question = this.state.contents[0]
         let content = [question]
 
         for (let i = 0; i < resultArray[0].length; i++) {
@@ -108,18 +118,47 @@ class TodoList extends Component {
 
 
         const text = content.join(this.state.sep)
-        this.handlePostQuery(text)
+	console.log(content)
+	this.handlePostQuery(text)
+        */
+	const question = this.state.contents[0]
+	var content = resultArray[0].join('')
         /*
+	for (let i = 0; i < resultArray[0].length; i++) {
+	    const line = resultArray[0][i];
+            content.concat(line)
+	    console.log(line)
+            console.log(content)
+	}
+	*/
+	//console.log(question)
+	//console.log(content)	
+	console.log(question)
+	this.run_model(question, content).finally(() => {})
+	/*
         this.setState({
             contents: question + "set done"
         })*/
 
     }
 
+    async run_model(question, content) {
+    	console.log("running query")
+	const answers = await this.model.findAnswers(question, content)
+	console.log(answers)
+	for (const ans of answers){
+	    console.log(ans)
+	    var start = ans.startIndex
+            var end = ans.endIndex
+	    console.log(start, end)
+            console.log(content.substr(start, end-start))
+	}
+    }
+
     queryAnswer(question) {
         const url = this.state.host + "/api/query"
         const content = document.body.innerText
-        const data = question+"\n"+content
+	const data = question+"\n"+content
         fetch(url, {
                 method:"POST",
                 mode: 'cors',
