@@ -6,9 +6,9 @@ const qna = require('@tensorflow-models/qna');
 class TodoList extends Component {
 
     async load_model() {
-    	this.model = await qna.load();
+        this.model = await qna.load();
     }
-    
+
     constructor(props) {
         super(props);
         this.state = {
@@ -18,14 +18,16 @@ class TodoList extends Component {
             host: 'http://caa6a6a9292c.ngrok.io',
         }
         //this.queryAnswer = this.queryAnswer.bind(this)
-        this.load_model = this.load_model.bind(this)	
-	this.run_model = this.run_model.bind(this)
-	this.load_model().finally(() => {
-        this.displayContent = this.displayContent.bind(this)
-        this.handlePostQuery = this.handlePostQuery.bind(this)
-	})
+        this.load_model = this.load_model.bind(this)
+        this.run_model = this.run_model.bind(this)
+        this.load_model().finally(() => {
+            this.displayContent = this.displayContent.bind(this)
+            this.handlePostQuery = this.handlePostQuery.bind(this)
+            this.highlightContent = this.highlightContent.bind(this)
+        })
+
     }
-	
+
 
     render() {
         return (
@@ -55,9 +57,9 @@ class TodoList extends Component {
         const str = e.target.value
         const lastChar = str[str.length -1];
 
-            this.setState({
-                inputValue: e.target.value
-            })
+        this.setState({
+            inputValue: e.target.value
+        })
 
 
     }
@@ -82,15 +84,6 @@ class TodoList extends Component {
                 this.displayContent);
 
 
-            const content = this.state.contents.join(this.state.sep)
-            //const query = question + this.state.sep + content
-            //console.log("current state")
-            //console.log(content)
-            //const answer = this.queryAnswer(question)
-            //console.log("the answer is")
-            //console.log(answer)
-            //this.handlePostQuery(query)
-
             chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
                 chrome.tabs.sendMessage(tabs[0].id, {greeting: question}, function(response) {
                     //console.log(response.farewell);
@@ -103,78 +96,71 @@ class TodoList extends Component {
 
     }
 
-    displayContent(resultArray) {
-        /* 
-	const question = this.state.contents[0]
-        let content = [question]
+    highlightContent(contents) {
+        const text = this.state.sep.join(contents)
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            chrome.tabs.sendMessage(tabs[0].id, {greeting: text}, function(response) {
+                //console.log(response.farewell);
+            });
+        });
+    }
 
-        for (let i = 0; i < resultArray[0].length; i++) {
-            const line = resultArray[0][i];
-            if (line.length < 20) {
-                continue;
+    displayContent(resultArray) {
+
+        const question = this.state.contents[0]
+        var content = resultArray[0].join('\\n')
+
+        console.log(question)
+        this.run_model(question, content).finally(() => {})
+        /*
+        if (localAnswers.length > 0) {
+            console.log("Found answers")
+            console.log(localAnswers)
+            this.highlightContent(localAnswers)
+        } else {
+            console.log("Cannot find answer on local; send question and content to backend.")
+            const question = this.state.contents[0]
+            let postContents = [question]
+
+            for (let i = 0; i < resultArray[0].length; i++) {
+                const line = resultArray[0][i];
+                if (line.length < 20) {
+                    continue;
+                }
+                postContents.push(line)
             }
-            content.push(line)
+            const text = postContents.join(this.state.sep)
+            this.handlePostQuery(text)
         }
 
+         */
 
-        const text = content.join(this.state.sep)
-	console.log(content)
-	this.handlePostQuery(text)
-        */
-	const question = this.state.contents[0]
-	var content = resultArray[0].join('')
-        /*
-	for (let i = 0; i < resultArray[0].length; i++) {
-	    const line = resultArray[0][i];
-            content.concat(line)
-	    console.log(line)
-            console.log(content)
-	}
-	*/
-	//console.log(question)
-	//console.log(content)	
-	console.log(question)
-	this.run_model(question, content).finally(() => {})
-	/*
-        this.setState({
-            contents: question + "set done"
-        })*/
 
     }
 
     async run_model(question, content) {
-    	console.log("running query")
-	const answers = await this.model.findAnswers(question, content)
-	console.log(answers)
-	for (const ans of answers){
-	    console.log(ans)
-	    var start = ans.startIndex
+        var localAnswers = []
+        console.log("running query")
+        const answers = await this.model.findAnswers(question, content)
+        console.log(answers)
+        for (const ans of answers){
+            console.log(ans)
+            var start = ans.startIndex
             var end = ans.endIndex
-	    console.log(start, end)
+            console.log(start, end)
             console.log(content.substr(start, end-start))
-	}
+            localAnswers = [...localAnswers, content.substr(start, end-start)]
+        }
+        const texts = localAnswers.join("%$")
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            chrome.tabs.sendMessage(tabs[0].id, {greeting: texts}, function(response) {
+                //console.log(response.farewell);
+            });
+        });
+
     }
 
-    queryAnswer(question) {
-        const url = this.state.host + "/api/query"
-        const content = document.body.innerText
-	const data = question+"\n"+content
-        fetch(url, {
-                method:"POST",
-                mode: 'cors',
-                credentials: 'include',
-                headers:{
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body:JSON.stringify(data)
-            }
-        ).then(response => {
-            return response.json()
-        }).then(json => {
-            console.log(json)
-            //this.setState({playerName: json[0]})
-        })
-    }
+
 
     handlePostQuery(query){
         const url = this.state.host + '/api/query'
@@ -199,17 +185,11 @@ class TodoList extends Component {
                     answer = "error happen in response"
                     //Perform action based on error
                 });
-            /*
-            this.setState({
-                contents: myParams.data,
-            })*/
+
         } else {
             alert("The search query cannot be empty")
         }
-        /*
-        this.setState({
-            contents: [answer],
-        }) */
+
     }
 
 
