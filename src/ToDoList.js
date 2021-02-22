@@ -16,7 +16,7 @@ class TodoList extends Component {
             contents: ['Ask as many questions as you want!'],
             sep: '%$',
             BATCH_SIZE: 256,
-            host: 'http://ef3c8cdb634e.ngrok.io',
+            host: 'http://1e675a49c5ae.ngrok.io',
         }
         //this.queryAnswer = this.queryAnswer.bind(this)
         this.load_model = this.load_model.bind(this)
@@ -144,6 +144,9 @@ class TodoList extends Component {
                 console.log(ans)
                 var start = ans.startIndex
                 var end = ans.endIndex
+                const score = ans.score
+                if (score < 0.8) break
+
                 console.log(start, end)
                 console.log(content.substr(start, end-start))
 
@@ -160,6 +163,7 @@ class TodoList extends Component {
 
 
                 localAnswers = [...localAnswers, content.substr(start, end-start)]
+
             }
             if (localAnswers.length > 1) {
                 foundAnswer = true
