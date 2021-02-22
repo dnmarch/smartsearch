@@ -15,7 +15,8 @@ class TodoList extends Component {
             inputValue: '',
             contents: ['Ask as many questions as you want!'],
             sep: '%$',
-            host: 'http://caa6a6a9292c.ngrok.io',
+            BATCH_SIZE: 256,
+            host: 'http://e9688813e064.ngrok.io',
         }
         //this.queryAnswer = this.queryAnswer.bind(this)
         this.load_model = this.load_model.bind(this)
@@ -108,22 +109,61 @@ class TodoList extends Component {
     displayContent(resultArray) {
 
         const question = this.state.contents[0]
-        var content = resultArray[0].join('\\n')
+        const contents = resultArray[0];
 
         console.log(question)
-        this.run_model(question, content).finally(() => {})
+        this.run_model(question, contents).finally(() => {})
+
         /*
-        if (localAnswers.length > 0) {
-            console.log("Found answers")
-            console.log(localAnswers)
-            this.highlightContent(localAnswers)
-        } else {
-            console.log("Cannot find answer on local; send question and content to backend.")
-            const question = this.state.contents[0]
+
+        */
+
+    }
+
+    async run_model(question, contents) {
+
+        console.log("running query")
+        let foundAnswer = false
+        let i = 0
+        let processLength = 0
+        let batch = []
+        while (i < contents.length) {
+            batch = [...batch, contents[i]]
+            processLength += contents[i].length
+            if (processLength < 3000) {
+                i += 1
+                if (i < contents.length) continue
+            }
+            processLength = 0
+            let localAnswers = [foundAnswer? "0":"clear highlight"]
+            const content = batch.join('\n')
+            const answers = await this.model.findAnswers(question, content)
+            console.log(answers)
+            for (const ans of answers){
+                console.log(ans)
+                var start = ans.startIndex
+                var end = ans.endIndex
+                console.log(start, end)
+                console.log(content.substr(start, end-start))
+                localAnswers = [...localAnswers, content.substr(start, end-start)]
+            }
+            if (localAnswers.length > 1) {
+                foundAnswer = true
+            }
+            // highlight
+            const texts = localAnswers.join(this.state.sep)
+            chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+                chrome.tabs.sendMessage(tabs[0].id, {greeting: texts}, function(response) {
+                    //console.log(response.farewell);
+                });
+            });
+        }
+        // Cannot find answer; search for the backend
+        if (foundAnswer === false) {
             let postContents = [question]
 
-            for (let i = 0; i < resultArray[0].length; i++) {
-                const line = resultArray[0][i];
+            for (let i = 0; i < contents.length; i++) {
+                const line = contents[i];
                 if (line.length < 20) {
                     continue;
                 }
@@ -133,30 +173,6 @@ class TodoList extends Component {
             this.handlePostQuery(text)
         }
 
-         */
-
-
-    }
-
-    async run_model(question, content) {
-        var localAnswers = []
-        console.log("running query")
-        const answers = await this.model.findAnswers(question, content)
-        console.log(answers)
-        for (const ans of answers){
-            console.log(ans)
-            var start = ans.startIndex
-            var end = ans.endIndex
-            console.log(start, end)
-            console.log(content.substr(start, end-start))
-            localAnswers = [...localAnswers, content.substr(start, end-start)]
-        }
-        const texts = localAnswers.join("%$")
-        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-            chrome.tabs.sendMessage(tabs[0].id, {greeting: texts}, function(response) {
-                //console.log(response.farewell);
-            });
-        });
 
     }
 
@@ -164,15 +180,16 @@ class TodoList extends Component {
 
     handlePostQuery(query){
         const url = this.state.host + '/api/query'
-        var myParams = {
+        const myParams = {
             data: query
-        }
+        };
         let answer = "fail"
         if (query !=="") {
             axios.post(url, myParams)
                 .then(function(response){
 
                     answer = response.data.toString()
+                    answer = "clear highlight%$"  + answer
                     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
                         chrome.tabs.sendMessage(tabs[0].id, {greeting: answer}, function(response) {
                             //console.log(response.farewell);
@@ -191,9 +208,6 @@ class TodoList extends Component {
         }
 
     }
-
-
-
 
 
 }

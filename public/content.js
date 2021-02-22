@@ -1,5 +1,7 @@
 /*global chrome*/
-const host = "http://272678b23a91.ngrok.io"
+
+const SEP = "%$"
+
 
 function doSearch(text, backgroundColor) {
 
@@ -37,18 +39,19 @@ chrome.runtime.onMessage.addListener(
         // Suppose to get the highlight text from back-end
         // Now just highlight the question(user input text)
         const answers = request.greeting
-        //const answer = queryAnswer(question)
-        //console.log("the answer return is")
-        //console.log(answer)
+        let answer_list = answers.split(SEP)
+        const clearHighlight = answer_list[0]
+        if (clearHighlight === "clear highlight") {
+            unhighlight(document.body)
+        }
 
-        unhighlight(document.body)
 
         console.log("receive answer")
         console.log(answers)
         console.log(answers.length)
-        let answer_list = answers.split("%$")
+
         console.log(answer_list)
-        for (var i = 0; i < answer_list.length; i++) {
+        for (var i = 1; i < answer_list.length; i++) {
             const answer = answer_list[i]
             console.log("inside for loop")
             console.log(answer)
@@ -64,52 +67,7 @@ chrome.runtime.onMessage.addListener(
 
     }
 );
-function queryAnswer(question) {
-    const url = host + "/api/query"
-    const content = document.body.innerText
-    const data = question+"\n"+content
-    fetch(url, {
-            method:"POST",
-            mode: 'cors',
-            credentials: 'include',
-            headers:{
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body:JSON.stringify(data)
-        }
-    ).then(response => {
-        return response.json()
-    }).then(json => {
-            console.log(json)
-            //this.setState({playerName: json[0]})
-        })
-}
 
-
-/*
-// Cannot do processing on
-async function predict(question) {
-    const { initModel, QAClient } = require("question-answering");
-    var passages = document.body.innerText.split("\n")
-    var scores = []
-    var answers = []
-    for (const text in passages) {
-        const qaClient = await QAClient.fromOptions();
-        const answer = await qaClient.predict(question, text);
-        const score = answer['score']
-        scores.push(score)
-        if (score > 0.1) {
-            answers.push(text)
-        }
-    }
-    console.log(scores)
-
-
-    for (const answer in answers) {
-        doSearch(answer, 'yellow')
-    }
-
-}*/
 
 
 let urls = new Set()
