@@ -5,7 +5,7 @@ const SEP = "%$"
 
 function doSearch(text, backgroundColor) {
 
-    console.log("doing search")
+    console.log("searching to highlight text")
     if (window.find && window.getSelection) {
         document.designMode = "on";
         var sel = window.getSelection();

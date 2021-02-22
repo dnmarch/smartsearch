@@ -16,7 +16,7 @@ class TodoList extends Component {
             contents: ['Ask as many questions as you want!'],
             sep: '%$',
             BATCH_SIZE: 256,
-            host: 'http://e9688813e064.ngrok.io',
+            host: 'http://ef3c8cdb634e.ngrok.io',
         }
         //this.queryAnswer = this.queryAnswer.bind(this)
         this.load_model = this.load_model.bind(this)
@@ -130,13 +130,14 @@ class TodoList extends Component {
         while (i < contents.length) {
             batch = [...batch, contents[i]]
             processLength += contents[i].length
-            if (processLength < 3000) {
-                i += 1
+            i += 1
+            if (processLength < 2000) {
                 if (i < contents.length) continue
             }
             processLength = 0
             let localAnswers = [foundAnswer? "0":"clear highlight"]
             const content = batch.join('\n')
+            batch = []
             const answers = await this.model.findAnswers(question, content)
             console.log(answers)
             for (const ans of answers){
@@ -145,21 +146,41 @@ class TodoList extends Component {
                 var end = ans.endIndex
                 console.log(start, end)
                 console.log(content.substr(start, end-start))
+
+                // adjust token index
+                var s = start
+                while (s < end && !"\t\r\n\f".includes(content[s])) s++;
+                if (s === end) {
+                    while (start >= 0 && !" \t\r\n\f".includes(content[start])) start--;
+                } else {
+                    start = s + 1
+                }
+
+                while (end < content.length && !" \t\r\n\f".includes(content[end])) end++;
+
+
                 localAnswers = [...localAnswers, content.substr(start, end-start)]
             }
             if (localAnswers.length > 1) {
                 foundAnswer = true
-            }
-            // highlight
-            const texts = localAnswers.join(this.state.sep)
-            chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-                chrome.tabs.sendMessage(tabs[0].id, {greeting: texts}, function(response) {
-                    //console.log(response.farewell);
+
+                // highlight
+                const texts = localAnswers.join(this.state.sep)
+                chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
+                    chrome.tabs.sendMessage(tabs[0].id, {greeting: texts}, function (response) {
+                        //console.log(response.farewell);
+                    });
                 });
-            });
+            }
         }
         // Cannot find answer; search for the backend
         if (foundAnswer === false) {
+
+            chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
+                chrome.tabs.sendMessage(tabs[0].id, {greeting: "query backend to find answer !!%"}, function (response) {
+                    //console.log(response.farewell);
+                });
+            });
             let postContents = [question]
 
             for (let i = 0; i < contents.length; i++) {
