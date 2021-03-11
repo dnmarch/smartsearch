@@ -53,15 +53,13 @@ chrome.runtime.onMessage.addListener(
         console.log(answer_list)
         for (var i = 1; i < answer_list.length; i++) {
             const answer = answer_list[i]
-            console.log("inside for loop")
-            console.log(answer)
 
             if (answer.length < 2) continue
 
-            console.log("searching answer")
-            console.log(answer)
+            //console.log("searching answer")
+            //console.log(answer)
             doSearch(answer, 'yellow')
-            console.log("searching answer end")
+            //console.log("searching answer end")
         }
 
 

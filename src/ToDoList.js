@@ -13,19 +13,103 @@ class TodoList extends Component {
         super(props);
         this.state = {
             inputValue: '',
-            contents: ['Ask as many questions as you want!'],
+            contents: ['Loading model...'],
             sep: '%$',
+            qasep:'#@',
             BATCH_SIZE: 256,
-            host: 'http://1e675a49c5ae.ngrok.io',
+            host: 'http://cf999a4c6ff6.ngrok.io',
+            topQuestions: ['Some are interesting questions', 'Some are boring questions'],
+            topAnswers: [['good', 'question'], ['bad', 'question']],
+            url: ""
         }
         //this.queryAnswer = this.queryAnswer.bind(this)
+        this.setTopAskedQuestion = this.setTopAskedQuestion.bind(this)
+        this.log_msg = this.log_msg.bind(this)
+        this.retrieveTopAskedQuestion = this.retrieveTopAskedQuestion.bind(this)
+        this.highlightContent = this.highlightContent.bind(this)
+        //this.showTopAnswer = this.showTopAnswer.bind(this)
         this.load_model = this.load_model.bind(this)
         this.run_model = this.run_model.bind(this)
         this.load_model().finally(() => {
-            this.displayContent = this.displayContent.bind(this)
-            this.handlePostQuery = this.handlePostQuery.bind(this)
-            this.highlightContent = this.highlightContent.bind(this)
+            this.searchAnswer = this.searchAnswer.bind(this)
+            this.retrieveAnswer = this.retrieveAnswer.bind(this)
+
         })
+
+    }
+    componentDidMount() {
+        this.setState({
+            contents: ['Ask as many questions as you want!']
+        })
+        chrome.tabs.executeScript( null, {code:'document.URL;'},
+            this.retrieveTopAskedQuestion);
+
+    }
+
+    setTopAskedQuestion() {
+        const url = this.state.host + '/api/init'
+        const query = this.state.url
+        const myParams = {
+            data: query
+        };
+        var self = this;
+        let hasQuestion = false
+        if (query !=="") {
+
+            axios.post(url, myParams)
+                .then(function(response){
+                    const data = response.data.toString()
+
+                    if (data.length > 0) {
+                        const qas = data.split(self.state.qasep)
+                        let topQuestions = []
+                        let topAnswers = []
+
+                        for (let i = 0; i < qas.length; i++) {
+                            const qa = qas[i].split(self.state.sep)
+                            topQuestions.push(qa[0])
+                            topAnswers.push(qa.slice(1))
+
+                        }
+
+                        self.setState({
+                            topQuestions: topQuestions,
+                            topAnswers: topAnswers,
+                        })
+                        hasQuestion = true
+                    }
+
+                })
+                .catch(function(error){
+                    console.log(error);
+                    self.setState({
+                        topQuestions: ["error", error.toString()],
+                        topAnswers: [['the', 'is'], ['an', 'error']],
+                    })
+
+                    //Perform action based on error
+                });
+
+        } else {
+            alert("The search query cannot be empty")
+        }
+        return hasQuestion
+
+    }
+
+    retrieveTopAskedQuestion(resultArray) {
+        this.setState({
+            url: resultArray[0]
+        })
+        const hasQuestion = this.setTopAskedQuestion()
+        if (!hasQuestion) {
+            this.setState({
+                topQuestions: ["Be the first one to ask question here!"]
+            })
+        }
+
+
+
 
     }
 
@@ -49,9 +133,26 @@ class TodoList extends Component {
                             })
                         }
                     </ul>
+                    <ul>
+                        {
+                            this.state.topQuestions.map((item, index) => {
+                                return <li onClick={this.showTopAnswer.bind(this, index)}
+                                           style={{cursor:'pointer'}}>
+                                           {item}
+
+                                        </li>
+                            })
+                        }
+                    </ul>
                 </div>
             </fragment>
         )
+    }
+    showTopAnswer(idx) {
+        const answers = this.state.topAnswers[idx]
+        this.highlightContent(answers, true)
+
+
     }
 
     handleInputChange(e) {
@@ -69,6 +170,8 @@ class TodoList extends Component {
         this.setState({
             contents: [...this.state.contents, this.state.inputValue],
         })
+
+        this.setTopAskedQuestion()
     }
 
     handleEnterKey(e) {
@@ -82,7 +185,7 @@ class TodoList extends Component {
                 contents: [this.state.inputValue],
             })
             chrome.tabs.executeScript( null, {code:'document.body.innerText.split("\\n");'},
-                this.displayContent);
+                this.searchAnswer);
 
 
             chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
@@ -92,13 +195,17 @@ class TodoList extends Component {
             });
 
         }
-
-
-
     }
 
-    highlightContent(contents) {
-        const text = this.state.sep.join(contents)
+    highlightContent(contents, clear=false) {
+        if (contents === null || contents === undefined) {
+            contents = ["something is wrong"]
+        }
+        // Format: "clear Highlight%$content"
+        let text = contents.join(this.state.sep)
+        const clearHeader = clear? "clear highlight": "0"
+        text = clearHeader + this.state.sep + text
+
         chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
             chrome.tabs.sendMessage(tabs[0].id, {greeting: text}, function(response) {
                 //console.log(response.farewell);
@@ -106,17 +213,13 @@ class TodoList extends Component {
         });
     }
 
-    displayContent(resultArray) {
+    searchAnswer(resultArray) {
 
         const question = this.state.contents[0]
         const contents = resultArray[0];
 
         console.log(question)
         this.run_model(question, contents).finally(() => {})
-
-        /*
-
-        */
 
     }
 
@@ -127,7 +230,10 @@ class TodoList extends Component {
         let i = 0
         let processLength = 0
         let batch = []
+        let all_answers_found = new Set()
+        let all_answers_found_list = []
         while (i < contents.length) {
+            //if (contents[i].split(' ').length < 4) continue
             batch = [...batch, contents[i]]
             processLength += contents[i].length
             i += 1
@@ -145,7 +251,7 @@ class TodoList extends Component {
                 var start = ans.startIndex
                 var end = ans.endIndex
                 const score = ans.score
-                if (score < 0.8) break
+                if (score < 0.85) break
 
                 console.log(start, end)
                 console.log(content.substr(start, end-start))
@@ -167,9 +273,19 @@ class TodoList extends Component {
             }
             if (localAnswers.length > 1) {
                 foundAnswer = true
-
+                // localAnswers[0] = clear highlight or not
+                let new_answers = [localAnswers[0]]
+                for (let i = 1; i < localAnswers.length; i++) {
+                    const ans = localAnswers[i]
+                    if (!all_answers_found.has(ans)) {
+                        new_answers = [...new_answers, ans]
+                        all_answers_found.add(ans)
+                        all_answers_found_list.push(ans)
+                    }
+                }
                 // highlight
-                const texts = localAnswers.join(this.state.sep)
+                //const texts = localAnswers.join(this.state.sep)
+                const texts = new_answers.join(this.state.sep)
                 chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
                     chrome.tabs.sendMessage(tabs[0].id, {greeting: texts}, function (response) {
                         //console.log(response.farewell);
@@ -194,8 +310,15 @@ class TodoList extends Component {
                 }
                 postContents.push(line)
             }
+            postContents.push(this.state.url)
+            postContents.push("@question")
             const text = postContents.join(this.state.sep)
-            this.handlePostQuery(text)
+            this.retrieveAnswer(text, true)
+        } else {
+            //const answer_found = Array.from(all_answers_found)
+            const qa = [question, ...all_answers_found_list, this.state.url, "@answer"]
+            const text = qa.join(this.state.sep)
+            this.retrieveAnswer(text, false)
         }
 
 
@@ -203,8 +326,8 @@ class TodoList extends Component {
 
 
 
-    handlePostQuery(query){
-        const url = this.state.host + '/api/query'
+    retrieveAnswer(query, isQuestion=true, subdomain='/api/query'){
+        const url = this.state.host + subdomain
         const myParams = {
             data: query
         };
@@ -212,14 +335,15 @@ class TodoList extends Component {
         if (query !=="") {
             axios.post(url, myParams)
                 .then(function(response){
-
-                    answer = response.data.toString()
-                    answer = "clear highlight%$"  + answer
-                    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-                        chrome.tabs.sendMessage(tabs[0].id, {greeting: answer}, function(response) {
-                            //console.log(response.farewell);
+                    if (isQuestion) {
+                        answer = response.data.toString()
+                        answer = "clear highlight%$" + answer
+                        chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
+                            chrome.tabs.sendMessage(tabs[0].id, {greeting: answer}, function (response) {
+                                //console.log(response.farewell);
+                            });
                         });
-                    });
+                    }
                     //Perform action based on response
                 })
                 .catch(function(error){
@@ -234,7 +358,15 @@ class TodoList extends Component {
 
     }
 
+    log_msg(msg) {
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            chrome.tabs.sendMessage(tabs[0].id, {greeting: msg}, function(response) {
+                //console.log(response.farewell);
+            });
+        });
+    }
 
 }
+
 
 export default TodoList
