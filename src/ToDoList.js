@@ -1,8 +1,10 @@
 /*global chrome*/
 import React, {Component} from 'react'
-import axios from 'axios';
-const qna = require('@tensorflow-models/qna');
 
+import axios from 'axios';
+
+
+const qna = require('@tensorflow-models/qna');
 class TodoList extends Component {
 
     async load_model() {
@@ -13,14 +15,16 @@ class TodoList extends Component {
         super(props);
         this.state = {
             inputValue: '',
-            contents: ['Loading model...'],
+            contents: [],
             sep: '%$',
             qasep:'#@',
             BATCH_SIZE: 256,
             host: 'http://cf999a4c6ff6.ngrok.io',
             topQuestions: ['Some are interesting questions', 'Some are boring questions'],
             topAnswers: [['good', 'question'], ['bad', 'question']],
-            url: ""
+            url: "",
+            vocab: [],
+            status: 'Loading model...',
         }
         //this.queryAnswer = this.queryAnswer.bind(this)
         this.setTopAskedQuestion = this.setTopAskedQuestion.bind(this)
@@ -30,19 +34,45 @@ class TodoList extends Component {
         //this.showTopAnswer = this.showTopAnswer.bind(this)
         this.load_model = this.load_model.bind(this)
         this.run_model = this.run_model.bind(this)
+        this.searchAnswer = this.searchAnswer.bind(this)
+        this.retrieveAnswer = this.retrieveAnswer.bind(this)
         this.load_model().finally(() => {
-            this.searchAnswer = this.searchAnswer.bind(this)
-            this.retrieveAnswer = this.retrieveAnswer.bind(this)
+
 
         })
 
     }
     componentDidMount() {
         this.setState({
-            contents: ['Ask as many questions as you want!']
+            status: 'Ask as many questions as you want!'
         })
         chrome.tabs.executeScript( null, {code:'document.URL;'},
             this.retrieveTopAskedQuestion);
+        //chrome.tabs.executeScript( null, {code:'document.body.innerText.split("\\n");'},
+        //    this.extractText);
+
+    }
+
+    extractText(resultArray) {
+        const contents = resultArray[0];
+        let vocab = new Set()
+        for (let i = 0; i < contents; i++) {
+            const words = contents[i].split(' ')
+            for (let j = 0; j < words.length; j++) {
+                const word = words[i].replace(/[^0-9a-z]/gi, '')
+                if (word.length === words[i].length) {
+                    vocab.add(word)
+                }
+
+            }
+
+        }
+        this.setState(
+            {
+                vocab: [...vocab]
+            }
+
+        )
 
     }
 
@@ -126,6 +156,7 @@ class TodoList extends Component {
                     <button onClick={this.handleButtonClick.bind(this)}>submit</button>
                 </div>
                 <div>
+                    {this.state.status}
                     <ul>
                         {
                             this.state.contents.map((item, index) => {
@@ -144,7 +175,10 @@ class TodoList extends Component {
                             })
                         }
                     </ul>
+
+
                 </div>
+
             </fragment>
         )
     }
@@ -178,6 +212,7 @@ class TodoList extends Component {
         if (e.key === 'Enter') {
             this.setState({
                 contents: [...this.state.contents, this.state.inputValue],
+                status: "Answer will be ready shortly..."
             })
 
             const question = this.state.inputValue
@@ -219,11 +254,15 @@ class TodoList extends Component {
         const contents = resultArray[0];
 
         console.log(question)
-        this.run_model(question, contents).finally(() => {})
+        const foundAnswer = this.run_model(question, contents).finally(() => {})
+        const msg = foundAnswer? "Answer Found!":"Sorry, no answer has been found. Please try with different question."
+        this.setState({
+            status: msg
+        })
 
     }
 
-    async run_model(question, contents) {
+    run_model = async(question, contents) => {
 
         console.log("running query")
         let foundAnswer = false
@@ -232,6 +271,7 @@ class TodoList extends Component {
         let batch = []
         let all_answers_found = new Set()
         let all_answers_found_list = []
+
         while (i < contents.length) {
             //if (contents[i].split(' ').length < 4) continue
             batch = [...batch, contents[i]]
@@ -313,13 +353,15 @@ class TodoList extends Component {
             postContents.push(this.state.url)
             postContents.push("@question")
             const text = postContents.join(this.state.sep)
-            this.retrieveAnswer(text, true)
+            foundAnswer = this.retrieveAnswer(text, true)
         } else {
-            //const answer_found = Array.from(all_answers_found)
+            // answer found in front-end; send the data to backend
+
             const qa = [question, ...all_answers_found_list, this.state.url, "@answer"]
             const text = qa.join(this.state.sep)
             this.retrieveAnswer(text, false)
         }
+        return foundAnswer
 
 
     }
@@ -331,18 +373,33 @@ class TodoList extends Component {
         const myParams = {
             data: query
         };
+        let foundAnswer = false
         let answer = "fail"
         if (query !=="") {
             axios.post(url, myParams)
                 .then(function(response){
                     if (isQuestion) {
                         answer = response.data.toString()
+                        foundAnswer = answer.length > 1
                         answer = "clear highlight%$" + answer
                         chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
                             chrome.tabs.sendMessage(tabs[0].id, {greeting: answer}, function (response) {
                                 //console.log(response.farewell);
                             });
                         });
+                        /*
+                        if (foundAnswer) {
+                            this.state.setState({
+                                    status: "Answers Found!"
+                                }
+                            )
+                        } else {
+                            this.state.setState({
+                                    status: "Sorry, the question is too hard. Please try another one"
+                                }
+                            )
+                        } */
+
                     }
                     //Perform action based on response
                 })
@@ -355,7 +412,7 @@ class TodoList extends Component {
         } else {
             alert("The search query cannot be empty")
         }
-
+        return foundAnswer
     }
 
     log_msg(msg) {
@@ -365,6 +422,12 @@ class TodoList extends Component {
             });
         });
     }
+
+
+
+
+
+
 
 }
 

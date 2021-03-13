@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@material-ui/core": "^4.11.3",
+    "@material-ui/lab": "^4.0.0-alpha.57",
     "@tensorflow-models/qna": "^1.0.0",
+    "antd": "^4.13.1",
     "axios": "^0.21.1",
     "node-pre-gyp": "^0.17.0",
     "qrcode.react": "^0.7.1",
