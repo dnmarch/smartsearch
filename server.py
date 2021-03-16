@@ -1,18 +1,22 @@
+import torch
+from transformers import AutoTokenizer, AutoModelForQuestionAnswering
+
+import tensorflow_hub as hub
+from absl import logging
+import numpy as np
+
 from flask import Flask 
 from flask import request
 from flask_cors import CORS, cross_origin
 from flask import jsonify
 from collections import defaultdict, Counter
-from heapq import heappush, heappop
 
-import torch
-from transformers import AutoTokenizer, AutoModelForQuestionAnswering
+from milvus import Milvus, DataType, MetricType
 
 tokenizer = AutoTokenizer.from_pretrained("bert-large-uncased-whole-word-masking-finetuned-squad")
 model = AutoModelForQuestionAnswering.from_pretrained("bert-large-uncased-whole-word-masking-finetuned-squad")
 tokenizer = AutoTokenizer.from_pretrained("bert-large-uncased-whole-word-masking-finetuned-squad")
 model = AutoModelForQuestionAnswering.from_pretrained("bert-large-uncased-whole-word-masking-finetuned-squad")
-
 def get_answer(questions, texts):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     answers = []
@@ -50,6 +54,36 @@ def get_answer(questions, texts):
             if len(answers) > 10:
                 return answers
     return answers
+
+logging.set_verbosity(logging.ERROR)
+module_url = "https://tfhub.dev/google/universal-sentence-encoder/4"
+model = hub.load(module_url)
+def get_embedding(sentence):
+    embedding = model([sentence])
+    return np.array(embedding)
+
+vector_to_question = defaultdict(set)
+client = Milvus('127.0.0.1', '19530')
+collection_name = "smartsearch"
+collection_param = {
+        "collection_name" : collection_name,
+        "dimension" : 512, 
+        "index_file_size" : 2048,
+        "metric_type": MetricType.IP
+}
+client.create_collection(collection_param)
+
+def insert_vector_entry(entry):
+    status, ids = client.insert(collection_name, entry)
+    return ids[0]
+
+def get_num_entries():
+    status, entries = client.count_entities(collection_name)
+    return num_entries
+
+def search_closest(entry, topk=3):
+    status, results = client.search(collection_name, topk, entry)
+    return results
 
 
 class URL:
@@ -143,11 +177,13 @@ def get_query_from_react():
     print("Question is: ", question)
     print("URL is ", url)
     answers = ""
+    found_in_database = False
     if not is_answer:
         old_answers = database.get_answer(url, question)
         if old_answers:
             print("Returning answer from database")
             answers = old_answers
+            found_in_database = True
         elif len(contents):
             print("Running back-end model to get answers")
             answers = sep.join(get_answer([question], contents))
@@ -158,8 +194,13 @@ def get_query_from_react():
         answers = sep.join(texts[1:-2])
     
     if answers:
-        database.set_url_qa(url, question, answers)
-        print("Adding <url, question, answer> to database")
+        if not found_in_database:
+            database.set_url_qa(url, question, answers)
+            print("Adding <url, question, answer> to database")
+
+            vector_id = insert_vector_entry(get_embedding(question))
+            vector_to_question[vector_id] = (question, answers)
+            print("Adding question embedding to similarity database")
         if not is_answer:
             print("Returning answer")
     else:
