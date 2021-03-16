@@ -21,7 +21,13 @@ function doSearch(text, backgroundColor) {
 
 function unhighlight(node) {
     if (node.nodeType === 1) {
-        node.style.backgroundColor = "";
+        try {
+            node.style.backgroundColor = "";
+        } catch(err) {
+            console.log(err)
+        }
+
+
     }
     var child = node.firstChild;
     while (child) {

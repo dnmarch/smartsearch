@@ -19,7 +19,7 @@ class TodoList extends Component {
             sep: '%$',
             qasep:'#@',
             BATCH_SIZE: 256,
-            host: 'http://fdccef587866.ngrok.io',
+            host: 'http://5e489d652208.ngrok.io',
             topQuestions: ['Some are interesting questions', 'Some are boring questions'],
             topAnswers: [['good', 'question'], ['bad', 'question']],
             url: "",
@@ -27,6 +27,7 @@ class TodoList extends Component {
             status: 'Loading model...',
         }
         //this.queryAnswer = this.queryAnswer.bind(this)
+        this.setStateAsync = this.setStateAsync.bind(this)
         this.setTopAskedQuestion = this.setTopAskedQuestion.bind(this)
         this.log_msg = this.log_msg.bind(this)
         this.retrieveTopAskedQuestion = this.retrieveTopAskedQuestion.bind(this)
@@ -35,6 +36,7 @@ class TodoList extends Component {
         this.load_model = this.load_model.bind(this)
         this.run_model = this.run_model.bind(this)
         this.searchAnswer = this.searchAnswer.bind(this)
+        this.searchAnswerBackend = this.searchAnswerBackend.bind(this)
         this.retrieveAnswer = this.retrieveAnswer.bind(this)
         this.load_model().finally(() => {
 
@@ -214,14 +216,9 @@ class TodoList extends Component {
                 contents: [this.state.inputValue],
             })
 
-            this.setState({
-                //contents: [...this.state.contents, this.state.inputValue],
-                status: "Answer will be ready shortly..."
-            }, () => {
-                chrome.tabs.executeScript( null, {code:'document.body.innerText.split("\\n");'},
-                    this.searchAnswer)
-            })
 
+            chrome.tabs.executeScript( null, {code:'document.body.innerText.split("\\n");'},
+                    this.searchAnswer)
             const question = this.state.inputValue
 
 
@@ -251,19 +248,28 @@ class TodoList extends Component {
         });
     }
 
+    setStateAsync(state) {
+        return new Promise((resolve) => {
+            this.setState(state, resolve)
+        });
+    }
+
     async searchAnswer(resultArray) {
 
         const question = this.state.contents[0]
         const contents = resultArray[0];
 
-        console.log(question)
-        const foundAnswer = await this.run_model(question, contents).finally(() => {})
-        const msg = foundAnswer? "Answer Found!":"Sorry, no answer has been found. Please try with different question."
-        this.setState({
-            status: msg
-        })
-
+        await this.setStateAsync({status: "Answer will be ready shortly..."});
+        const texts = await this.run_model(question, contents)
+        if (texts !== "") {
+            await this.setStateAsync({status: "Good Question! Let me ask my boss for advice..."});
+            const foundAnswer = await this.searchAnswerBackend(texts)
+            await this.setStateAsync({status: foundAnswer ? "Answer Found!" : "Sorry, no answer found. Try a new one."})
+        } else {
+            await this.setStateAsync({status: "Answer Found!"})
+        }
     }
+
 
     run_model = async(question, contents) => {
 
@@ -336,14 +342,17 @@ class TodoList extends Component {
                 });
             }
         }
-        // Cannot find answer; search for the backend
-        if (foundAnswer === false) {
 
-            chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
-                chrome.tabs.sendMessage(tabs[0].id, {greeting: "query backend to find answer !!%"}, function (response) {
-                    //console.log(response.farewell);
-                });
-            });
+        if (foundAnswer) {
+            const qa = [question, ...all_answers_found_list, this.state.url, "@answer"]
+            const text = qa.join(this.state.sep)
+            await this.retrieveAnswer(text, false)
+            return new Promise(function (resolve, reject) {
+                resolve("")
+            })
+
+
+        } else {
             let postContents = [question]
 
             for (let i = 0; i < contents.length; i++) {
@@ -355,24 +364,33 @@ class TodoList extends Component {
             }
             postContents.push(this.state.url)
             postContents.push("@question")
-            const text = postContents.join(this.state.sep)
-            return this.retrieveAnswer(text, true);
-        } else {
-            // answer found in front-end; send the data to backend
+            const texts = postContents.join(this.state.sep)
+            return new Promise(function (resolve, reject) {
+                resolve(texts)
+            })
 
-            const qa = [question, ...all_answers_found_list, this.state.url, "@answer"]
-            const text = qa.join(this.state.sep)
-            this.retrieveAnswer(text, false)
-            return true
         }
 
+    }
 
+    async searchAnswerBackend(text) {
+        if (text === "") return true
+        chrome.tabs.query({active: true, currentWindow: true}, function (tabs) {
+            chrome.tabs.sendMessage(tabs[0].id, {greeting: "query backend to find answer !!%"}, function (response) {
+                //console.log(response.farewell);
+            });
+        });
 
+        let foundAnswer = await this.retrieveAnswer(text, true);
+        return new Promise(function(resolve, reject) {
+            resolve(foundAnswer)
+        })
+        //return this.retrieveAnswer(text, true);
     }
 
 
 
-    retrieveAnswer(query, isQuestion=true, subdomain='/api/query'){
+    async retrieveAnswer(query, isQuestion=true, subdomain='/api/query'){
         const url = this.state.host + subdomain
         const myParams = {
             data: query
@@ -380,7 +398,7 @@ class TodoList extends Component {
         let foundAnswer = false
         let answer = "fail"
         if (query !=="") {
-            axios.post(url, myParams)
+            await axios.post(url, myParams)
                 .then(function(response){
                     if (isQuestion) {
                         answer = response.data.toString()
@@ -391,18 +409,6 @@ class TodoList extends Component {
                                 //console.log(response.farewell);
                             });
                         });
-                        /*
-                        if (foundAnswer) {
-                            this.state.setState({
-                                    status: "Answers Found!"
-                                }
-                            )
-                        } else {
-                            this.state.setState({
-                                    status: "Sorry, the question is too hard. Please try another one"
-                                }
-                            )
-                        } */
 
                     }
                     //Perform action based on response
