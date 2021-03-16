@@ -19,10 +19,10 @@ class TodoList extends Component {
             sep: '%$',
             qasep:'#@',
             BATCH_SIZE: 256,
-            host: 'http://5e489d652208.ngrok.io',
+            host: 'http://e31e7c8d88a8.ngrok.io',
             topQuestions: ['Some are interesting questions', 'Some are boring questions'],
             topAnswers: [['good', 'question'], ['bad', 'question']],
-            url: "",
+            url: "some website",
             vocab: [],
             status: 'Loading model...',
         }
@@ -204,29 +204,25 @@ class TodoList extends Component {
 
     handleButtonClick() {
         this.setState({
-            contents: [...this.state.contents, this.state.inputValue],
+            contents: [this.state.inputValue],
         })
 
-        this.setTopAskedQuestion()
+
+        chrome.tabs.executeScript( null, {code:'document.body.innerText.split("\\n");'},
+            this.searchAnswer)
+        const question = this.state.inputValue
+
+
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            chrome.tabs.sendMessage(tabs[0].id, {greeting: question}, function(response) {
+                //console.log(response.farewell);
+            });
+        });
     }
 
     handleEnterKey(e) {
         if (e.key === 'Enter') {
-            this.setState({
-                contents: [this.state.inputValue],
-            })
-
-
-            chrome.tabs.executeScript( null, {code:'document.body.innerText.split("\\n");'},
-                    this.searchAnswer)
-            const question = this.state.inputValue
-
-
-            chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-                chrome.tabs.sendMessage(tabs[0].id, {greeting: question}, function(response) {
-                    //console.log(response.farewell);
-                });
-            });
+            this.handleButtonClick()
 
         }
     }
@@ -260,6 +256,18 @@ class TodoList extends Component {
         const contents = resultArray[0];
 
         await this.setStateAsync({status: "Answer will be ready shortly..."});
+
+        // format: question%$content%$url%$type
+        let foundAnswer = await this.searchAnswerBackend(question + this.state.sep+""+
+            this.state.sep + this.state.url + this.state.sep+"@question")
+
+        if (foundAnswer) {
+            await this.setStateAsync({status: "Answer Found"});
+            return
+        } else {
+            await this.setStateAsync({status: "Working Hard to find it"});
+        }
+
         const texts = await this.run_model(question, contents)
         if (texts !== "") {
             await this.setStateAsync({status: "Good Question! Let me ask my boss for advice..."});
