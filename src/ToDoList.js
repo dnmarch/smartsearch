@@ -19,7 +19,7 @@ class TodoList extends Component {
             sep: '%$',
             qasep:'#@',
             BATCH_SIZE: 256,
-            host: 'http://cf999a4c6ff6.ngrok.io',
+            host: 'http://fdccef587866.ngrok.io',
             topQuestions: ['Some are interesting questions', 'Some are boring questions'],
             topAnswers: [['good', 'question'], ['bad', 'question']],
             url: "",
@@ -113,7 +113,7 @@ class TodoList extends Component {
                 .catch(function(error){
                     console.log(error);
                     self.setState({
-                        topQuestions: ["error", error.toString()],
+                        topQuestions: ["Offline mode", error.toString()],
                         topAnswers: [['the', 'is'], ['an', 'error']],
                     })
 
@@ -211,16 +211,18 @@ class TodoList extends Component {
     handleEnterKey(e) {
         if (e.key === 'Enter') {
             this.setState({
-                contents: [...this.state.contents, this.state.inputValue],
+                contents: [this.state.inputValue],
+            })
+
+            this.setState({
+                //contents: [...this.state.contents, this.state.inputValue],
                 status: "Answer will be ready shortly..."
+            }, () => {
+                chrome.tabs.executeScript( null, {code:'document.body.innerText.split("\\n");'},
+                    this.searchAnswer)
             })
 
             const question = this.state.inputValue
-            this.setState({
-                contents: [this.state.inputValue],
-            })
-            chrome.tabs.executeScript( null, {code:'document.body.innerText.split("\\n");'},
-                this.searchAnswer);
 
 
             chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
@@ -231,6 +233,7 @@ class TodoList extends Component {
 
         }
     }
+
 
     highlightContent(contents, clear=false) {
         if (contents === null || contents === undefined) {
@@ -248,13 +251,13 @@ class TodoList extends Component {
         });
     }
 
-    searchAnswer(resultArray) {
+    async searchAnswer(resultArray) {
 
         const question = this.state.contents[0]
         const contents = resultArray[0];
 
         console.log(question)
-        const foundAnswer = this.run_model(question, contents).finally(() => {})
+        const foundAnswer = await this.run_model(question, contents).finally(() => {})
         const msg = foundAnswer? "Answer Found!":"Sorry, no answer has been found. Please try with different question."
         this.setState({
             status: msg
@@ -353,15 +356,16 @@ class TodoList extends Component {
             postContents.push(this.state.url)
             postContents.push("@question")
             const text = postContents.join(this.state.sep)
-            foundAnswer = this.retrieveAnswer(text, true)
+            return this.retrieveAnswer(text, true);
         } else {
             // answer found in front-end; send the data to backend
 
             const qa = [question, ...all_answers_found_list, this.state.url, "@answer"]
             const text = qa.join(this.state.sep)
             this.retrieveAnswer(text, false)
+            return true
         }
-        return foundAnswer
+
 
 
     }
