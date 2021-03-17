@@ -1,7 +1,7 @@
 {
     "manifest_version": 2,
-    "name": "QR Code",
-    "description": "Generate QR Code",
+    "name": "SmartSearch",
+    "description": "Intelligently search the web",
     "version": "0.1",
     "icons": {
         "16": "./favicon.png",
@@ -24,7 +24,7 @@
             "38": "./favicon.png"
         },
         "default_popup": "index.html",
-        "default_title": "Generate QRCode"
+        "default_title": "Intelligently search the web"
     },
     "permissions": [
         "activeTab",
