@@ -10,6 +10,7 @@ from flask_cors import CORS, cross_origin
 from flask import jsonify
 from collections import defaultdict, Counter
 
+import pickle
 from milvus import Milvus, DataType, MetricType
 
 tokenizer = AutoTokenizer.from_pretrained("bert-large-uncased-whole-word-masking-finetuned-squad")
@@ -61,8 +62,12 @@ def get_embedding(sentence):
     embed = embedding[0]/np.linalg.norm(embedding[0])
     return np.array([embed])
 
-
-vector_to_question = defaultdict(set)
+try:
+    vector_to_question = pickle.load(open('vector_database.db', 'rb'))
+except (OSError, IOError) as e:
+    vector_to_question = defaultdict(set)
+num_database_entries = 0
+saved_database_entries = 0
 client = Milvus('127.0.0.1', '19530')
 collection_name = "smartsearch"
 collection_param = {
@@ -78,7 +83,7 @@ def insert_vector_entry(entry):
     return ids[0]
 
 def get_num_entries():
-    status, entries = client.count_entities(collection_name)
+    status, num_entries = client.count_entities(collection_name)
     return num_entries
 
 def search_closest(entry, topk=3):
@@ -141,8 +146,11 @@ class Database:
             return
         del self.urls[url]
 
+try:
+    database = pickle.load(open('qa_database.db', 'rb'))
+except (OSError, IOError) as e:
+    database = Database()
 
-database = Database()
 app = Flask(__name__) 
 # CORS(app)
 app.config['CORS_HEADERS'] = 'Content-Type'
@@ -157,6 +165,7 @@ def home():
 @cross_origin(headers=['Content-Type'])
 def get_query_from_react():
     print()
+    global num_database_entries
     sep = '%$'
     data = request.get_json()
     texts = data['data'].split(sep)
@@ -201,6 +210,7 @@ def get_query_from_react():
             embedding = get_embedding(question)
             vector_id = insert_vector_entry(embedding)
             vector_to_question[vector_id] = (question, answers, url)
+            num_database_entries += 1
             print("Adding question embedding to similarity database")
         if not is_answer:
             print("Returning answer")
@@ -231,6 +241,8 @@ def get_top_question_answer():
 @cross_origin(headers=['Content-Type'])
 def get_similar_question_answer():
     print()
+    global num_database_entries
+    global saved_database_entries
     print("Attempting to retrieve similar queries and answers")
     data = request.get_json()
     question = data['data']
@@ -243,12 +255,18 @@ def get_similar_question_answer():
     if len(closest_queries) > 0:
         closest_queries = closest_queries[0]
     for query in closest_queries:
-        if query.distance >= 0.4:
+        if query.distance >= 0.5:
             if query.id in vector_to_question:
                 query, answers, url = vector_to_question[query.id]
                 if query != question:
                     first_answer = answers.split('%$')[0]
                     response.append({"question": query, "answer": first_answer, "url": url})
+
+    if num_database_entries > saved_database_entries + 5:
+        print("Flushing database to disk")
+        pickle.dump(vector_to_question, open('vector_database.db', 'wb'))
+        pickle.dump(database, open('qa_database.db', 'wb'))
+        saved_database_entries = num_database_entries
 
     if len(response) > 0:
         print("Returning top similar question and answers")
