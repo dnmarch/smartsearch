@@ -19,10 +19,11 @@ class TodoList extends Component {
             sep: '%$',
             qasep:'#@',
             BATCH_SIZE: 256,
-            host: 'http://e31e7c8d88a8.ngrok.io',
-            topQuestions: ['Some are interesting questions', 'Some are boring questions'],
+            host: 'http://34.105.121.149:80',
+	    topQuestions: ['Some are interesting questions', 'Some are boring questions'],
             topAnswers: [['good', 'question'], ['bad', 'question']],
-            url: "some website",
+            similarQandA: [{question: 'No similar queries found', answer: 'No similar answers'}],
+	    url: "some website",
             vocab: [],
             status: 'Loading model...',
         }
@@ -32,18 +33,20 @@ class TodoList extends Component {
         this.log_msg = this.log_msg.bind(this)
         this.retrieveTopAskedQuestion = this.retrieveTopAskedQuestion.bind(this)
         this.highlightContent = this.highlightContent.bind(this)
+        this.findSimilarQueries = this.findSimilarQueries.bind(this)
         //this.showTopAnswer = this.showTopAnswer.bind(this)
         this.load_model = this.load_model.bind(this)
         this.run_model = this.run_model.bind(this)
         this.searchAnswer = this.searchAnswer.bind(this)
         this.searchAnswerBackend = this.searchAnswerBackend.bind(this)
         this.retrieveAnswer = this.retrieveAnswer.bind(this)
-        this.load_model().finally(() => {
+	this.load_model().finally(() => {
 
 
         })
 
     }
+
     componentDidMount() {
         this.setState({
             status: 'Ask as many questions as you want!'
@@ -136,7 +139,7 @@ class TodoList extends Component {
         const hasQuestion = this.setTopAskedQuestion()
         if (!hasQuestion) {
             this.setState({
-                topQuestions: ["Be the first one to ask question here!"]
+                topQuestions: ["Be the first one to ask a question here!"]
             })
         }
 
@@ -157,15 +160,8 @@ class TodoList extends Component {
                     />
                     <button onClick={this.handleButtonClick.bind(this)}>submit</button>
                 </div>
-                <div>
-                    {this.state.status}
-                    <ul>
-                        {
-                            this.state.contents.map((item, index) => {
-                                return <li> {item}</li>
-                            })
-                        }
-                    </ul>
+                <div> {this.state.status} </div>
+		<div> Top Questions Asked
                     <ul>
                         {
                             this.state.topQuestions.map((item, index) => {
@@ -177,10 +173,16 @@ class TodoList extends Component {
                             })
                         }
                     </ul>
-
-
                 </div>
-
+		<div> Similar Q&A Asked
+                    <ul>
+                        {
+                            this.state.similarQandA.map((item, index) => {
+                                return ([<li> {item.question} : {item.answer} </li>]);
+                            })
+                        }
+                    </ul>
+                </div>
             </fragment>
         )
     }
@@ -193,7 +195,6 @@ class TodoList extends Component {
 
     handleInputChange(e) {
         const str = e.target.value
-        const lastChar = str[str.length -1];
 
         this.setState({
             inputValue: e.target.value
@@ -206,7 +207,7 @@ class TodoList extends Component {
         this.setState({
             contents: [this.state.inputValue],
         })
-
+	
 
         chrome.tabs.executeScript( null, {code:'document.body.innerText.split("\\n");'},
             this.searchAnswer)
@@ -221,9 +222,9 @@ class TodoList extends Component {
     }
 
     handleEnterKey(e) {
+	console.log(e.key)
         if (e.key === 'Enter') {
             this.handleButtonClick()
-
         }
     }
 
@@ -263,19 +264,52 @@ class TodoList extends Component {
 
         if (foundAnswer) {
             await this.setStateAsync({status: "Answer Found"});
-            return
         } else {
-            await this.setStateAsync({status: "Working Hard to find it"});
+            await this.setStateAsync({status: "Working hard to find it"});
         }
 
-        const texts = await this.run_model(question, contents)
-        if (texts !== "") {
+	let texts = "";
+	if (!foundAnswer) {
+        	texts = await this.run_model(question, contents)
+	}
+        if (!foundAnswer && texts !== "") {
             await this.setStateAsync({status: "Good Question! Let me ask my boss for advice..."});
             const foundAnswer = await this.searchAnswerBackend(texts)
             await this.setStateAsync({status: foundAnswer ? "Answer Found!" : "Sorry, no answer found. Try a new one."})
         } else {
             await this.setStateAsync({status: "Answer Found!"})
         }
+	
+	const similar_queries_answers = await this.findSimilarQueries(question)
+	if (similar_queries_answers.length !== 0) {
+	    await this.setStateAsync({ similarQandA : similar_queries_answers})
+	} else {
+            await this.setStateAsync({similarQandA: [{question: 'No similar queries found', answer: 'No similar answers'}]})
+	}
+    }
+
+    
+    async findSimilarQueries(question, subdomain='/api/similar') {
+        const url = this.state.host + subdomain
+        const myParams = {
+            data: question
+        };
+	let answer = [];
+        if (question !=="") {
+            await axios.post(url, myParams)
+                .then(function(response){
+                        answer = response.data
+                })
+                .catch(function(error){
+                    console.log(error);
+                    answer = "error happened in response"
+                    //Perform action based on error
+                });
+
+        } else {
+            alert("The search query cannot be empty")
+        }
+        return answer
     }
 
 
