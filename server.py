@@ -1,9 +1,7 @@
 import torch
 from transformers import AutoTokenizer, AutoModelForQuestionAnswering
 
-import tensorflow_hub as hub
-from absl import logging
-import numpy as np
+from sentence_transformers import SentenceTransformer
 
 from flask import Flask 
 from flask import request
@@ -13,8 +11,6 @@ from collections import defaultdict, Counter
 
 from milvus import Milvus, DataType, MetricType
 
-tokenizer = AutoTokenizer.from_pretrained("bert-large-uncased-whole-word-masking-finetuned-squad")
-model = AutoModelForQuestionAnswering.from_pretrained("bert-large-uncased-whole-word-masking-finetuned-squad")
 tokenizer = AutoTokenizer.from_pretrained("bert-large-uncased-whole-word-masking-finetuned-squad")
 model = AutoModelForQuestionAnswering.from_pretrained("bert-large-uncased-whole-word-masking-finetuned-squad")
 def get_answer(questions, texts):
@@ -55,19 +51,21 @@ def get_answer(questions, texts):
                 return answers
     return answers
 
-logging.set_verbosity(logging.ERROR)
-module_url = "https://tfhub.dev/google/universal-sentence-encoder/4"
-model = hub.load(module_url)
+embed_model = SentenceTransformer('quora-distilbert-base')
+embed_model.to('cpu')
 def get_embedding(sentence):
-    embedding = model([sentence])
-    return np.array(embedding)
+    embed_model.to('cuda')
+    embedding = embed_model.encode([sentence])
+    embed_model.to('cpu')
+    return embedding
+
 
 vector_to_question = defaultdict(set)
 client = Milvus('127.0.0.1', '19530')
 collection_name = "smartsearch"
 collection_param = {
         "collection_name" : collection_name,
-        "dimension" : 512, 
+        "dimension" : 768, 
         "index_file_size" : 2048,
         "metric_type": MetricType.IP
 }
