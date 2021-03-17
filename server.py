@@ -200,7 +200,7 @@ def get_query_from_react():
     
             embedding = get_embedding(question)
             vector_id = insert_vector_entry(embedding)
-            vector_to_question[vector_id] = (question, answers)
+            vector_to_question[vector_id] = (question, answers, url)
             print("Adding question embedding to similarity database")
         if not is_answer:
             print("Returning answer")
@@ -243,12 +243,12 @@ def get_similar_question_answer():
     if len(closest_queries) > 0:
         closest_queries = closest_queries[0]
     for query in closest_queries:
-        if query.distance >= 0.8:
+        if query.distance >= 0.4:
             if query.id in vector_to_question:
-                query, answers = vector_to_question[query.id]
+                query, answers, url = vector_to_question[query.id]
                 if query != question:
                     first_answer = answers.split('%$')[0]
-                    response.append({"question": query, "answer": first_answer})
+                    response.append({"question": query, "answer": first_answer, "url": url})
 
     if len(response) > 0:
         print("Returning top similar question and answers")
