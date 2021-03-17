@@ -1,5 +1,6 @@
 import torch
 from transformers import AutoTokenizer, AutoModelForQuestionAnswering
+import numpy as np
 
 from sentence_transformers import SentenceTransformer
 
@@ -57,7 +58,8 @@ def get_embedding(sentence):
     embed_model.to('cuda')
     embedding = embed_model.encode([sentence])
     embed_model.to('cpu')
-    return embedding
+    embed = embedding[0]/np.linalg.norm(embedding[0])
+    return np.array([embed])
 
 
 vector_to_question = defaultdict(set)
@@ -195,8 +197,9 @@ def get_query_from_react():
         if not found_in_database:
             database.set_url_qa(url, question, answers)
             print("Adding <url, question, answer> to database")
-
-            vector_id = insert_vector_entry(get_embedding(question))
+    
+            embedding = get_embedding(question)
+            vector_id = insert_vector_entry(embedding)
             vector_to_question[vector_id] = (question, answers)
             print("Adding question embedding to similarity database")
         if not is_answer:
@@ -223,5 +226,35 @@ def get_top_question_answer():
         print("No cached top question and answers for the URL found")
     
     return jsonify(qa)
+
+@app.route('/api/similar', methods = ['POST', 'GET'])
+@cross_origin(headers=['Content-Type'])
+def get_similar_question_answer():
+    print()
+    print("Attempting to retrieve similar queries and answers")
+    data = request.get_json()
+    question = data['data']
+    print("Question is: ", question)
+    
+    response = []
+    embedding = get_embedding(question)
+    
+    closest_queries = search_closest(embedding)
+    if len(closest_queries) > 0:
+        closest_queries = closest_queries[0]
+    for query in closest_queries:
+        if query.distance >= 0.8:
+            if query.id in vector_to_question:
+                query, answers = vector_to_question[query.id]
+                if query != question:
+                    first_answer = answers.split('%$')[0]
+                    response.append({"question": query, "answer": first_answer})
+
+    if len(response) > 0:
+        print("Returning top similar question and answers")
+    else:
+        print("No similar question and answers found")
+    
+    return jsonify(response)
 
 app.run(host='0.0.0.0', port=80)
