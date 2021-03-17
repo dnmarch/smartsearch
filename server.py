@@ -243,7 +243,7 @@ def get_similar_question_answer():
     if len(closest_queries) > 0:
         closest_queries = closest_queries[0]
     for query in closest_queries:
-        if query.distance >= 0.5:
+        if query.distance >= 0.4:
             if query.id in vector_to_question:
                 query, answers, url = vector_to_question[query.id]
                 if query != question:
