@@ -22,7 +22,7 @@ class TodoList extends Component {
             host: 'http://34.105.121.149:80',
 	    topQuestions: ['Some are interesting questions', 'Some are boring questions'],
             topAnswers: [['good', 'question'], ['bad', 'question']],
-            similarQandA: [{question: 'No similar queries found', answer: 'No similar answers'}],
+            similarQandA: [{question: 'No similar queries found', answer: '', url: ''}],
 	    url: "some website",
             vocab: [],
             status: 'Loading model...',
@@ -178,7 +178,7 @@ class TodoList extends Component {
                     <ul>
                         {
                             this.state.similarQandA.map((item, index) => {
-                                return ([<li> {item.question} : {item.answer} </li>]);
+                                return ([<li> {item.question} : {item.answer} : {item.url} </li>]);
                             })
                         }
                     </ul>
@@ -284,7 +284,7 @@ class TodoList extends Component {
 	if (similar_queries_answers.length !== 0) {
 	    await this.setStateAsync({ similarQandA : similar_queries_answers})
 	} else {
-            await this.setStateAsync({similarQandA: [{question: 'No similar queries found', answer: 'No similar answers'}]})
+            await this.setStateAsync({similarQandA: [{question: 'No similar queries found', answer: '', url: ''}]})
 	}
     }
 
